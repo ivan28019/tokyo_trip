@@ -27,6 +27,12 @@
             margin-right: auto;
             height: 350px; /* 增加高度以容納圓餅圖和圖例 */
             max-height: 400px;
+            box-sizing: border-box;
+        }
+
+        .chart-container canvas {
+            width: 100% !important;
+            height: 100% !important;
         }
 
         @media (min-width: 768px) {
@@ -34,6 +40,47 @@
                 height: 350px;
                 max-height: 400px;
             }
+        }
+
+        /* Mobile: reduce chart height and give tab content extra bottom space so the chart/legend won't collide with bottom buttons */
+        @media (max-width: 640px) {
+            .chart-container {
+                height: 240px !important; /* 讓圓餅圖變小，避免與頁面底部衝突 */
+                max-height: 320px !important;
+            }
+            .tab-content {
+                padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 3.5rem); /* 增加底部空間（可調），同時尊重安全區域 */
+            }
+            /* 可選：讓圖例置底並置中，節省左右空間 */
+            .chart-legend-bottom {
+                display: flex;
+                justify-content: center;
+                flex-wrap: wrap;
+                gap: 0.5rem 0.75rem;
+                margin-top: 0.5rem;
+                text-align: center;
+                padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+            }
+        }
+
+        .chart-legend-bottom .legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: rgba(255,255,255,0.9);
+            padding: 0.25rem 0.5rem;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            color: #183B56;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+        }
+
+        .chart-legend-bottom .legend-box {
+            display:inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+            flex-shrink: 0;
         }
         
         .timeline-item {
@@ -252,6 +299,7 @@
                         <div class="chart-container h-[350px] max-h-[400px]">
                             <canvas id="day1Chart"></canvas>
                             <p class="text-center text-sm text-gray-600 mt-2">Day 1 時間分配 (小時)</p>
+                            <div id="day1Legend" class="chart-legend-bottom"></div>
                         </div>
                     </div>
                 </div>
@@ -325,6 +373,7 @@
                         <div class="chart-container h-[350px] max-h-[400px]">
                             <canvas id="day2Chart"></canvas>
                             <p class="text-center text-sm text-gray-600 mt-2">Day 2 時間分配 (小時)</p>
+                            <div id="day2Legend" class="chart-legend-bottom"></div>
                         </div>
                     </div>
                 </div>
@@ -418,6 +467,7 @@
                         <div class="chart-container h-[350px] max-h-[400px]">
                             <canvas id="day3Chart"></canvas>
                             <p class="text-center text-sm text-gray-600 mt-2">Day 3 時間分配 (小時)</p>
+                            <div id="day3Legend" class="chart-legend-bottom"></div>
                         </div>
                     </div>
                 </div>
@@ -515,6 +565,7 @@
                         <div class="chart-container h-[350px] max-h-[400px]">
                             <canvas id="day4Chart"></canvas>
                             <p class="text-center text-sm text-gray-600 mt-2">Day 4 時間分配 (小時)</p>
+                            <div id="day4Legend" class="chart-legend-bottom"></div>
                         </div>
                     </div>
                 </div>
@@ -634,6 +685,7 @@
                         <div class="chart-container h-[350px] max-h-[400px]">
                             <canvas id="day5Chart"></canvas>
                             <p class="text-center text-sm text-gray-600 mt-2">Day 5 時間分配 (小時)</p>
+                            <div id="day5Legend" class="chart-legend-bottom"></div>
                         </div>
                     </div>
                 </div>
@@ -654,6 +706,8 @@
         const tabContainer = document.getElementById('tabs-container');
         const tabButtons = tabContainer.querySelectorAll('.tab-btn');
         const tabContents = document.querySelectorAll('.tab-content');
+        // This will be set after charts are created and is safe to consult in the click handler
+        let chartMap = {};
 
         tabButtons.forEach(button => {
             button.addEventListener('click', () => {
@@ -673,24 +727,42 @@
                         content.classList.add('hidden');
                     }
                 });
+                // Resize/update visible chart so Chart.js renders correctly after changing visibility
+                if (chartMap[targetTab]) {
+                    setTimeout(() => {
+                        try {
+                            chartMap[targetTab].resize();
+                            chartMap[targetTab].update();
+                        } catch (e) {
+                            // ignore errors during early load
+                        }
+                    }, 120);
+                }
             });
         });
 
         
+        function getLegendPosition() {
+            return window.innerWidth <= 640 ? 'bottom' : 'right';
+        }
+
         const commonChartOptions = {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
                 legend: {
                     /* UI Refinement: 將圖例移至右側以避免文字截斷 */
-                    position: 'right', 
+                    position: getLegendPosition(), 
                     align: 'center',
+                    // On small screens, we will hide Chart.js legend (and use HTML legend). The display flag is toggled in toggleLegendDisplay.
+                    display: window.innerWidth > 640,
                     labels: {
                         font: {
                             family: "'Inter', 'Noto Sans TC', sans-serif"
                         },
-                        boxWidth: 10,
-                        padding: 15
+                        boxWidth: 8,
+                        usePointStyle: true,
+                        padding: 10
                     }
                 },
                 tooltip: {
@@ -722,7 +794,7 @@
         
         
         const ctxDay1 = document.getElementById('day1Chart').getContext('2d');
-        new Chart(ctxDay1, {
+        const day1Chart = new Chart(ctxDay1, {
             type: 'doughnut',
             data: {
                 labels: ['機場交通', 'Check-in & 緩衝', '餐飲', '新宿探索'],
@@ -735,7 +807,7 @@
         });
         
         const ctxDay2 = document.getElementById('day2Chart').getContext('2d');
-        new Chart(ctxDay2, {
+        const day2Chart = new Chart(ctxDay2, {
             type: 'doughnut',
             data: {
                 labels: ['交通', ['淺草 & 晴空塔', '觀光'], '上野 & 秋葉原', '餐飲'],
@@ -748,7 +820,7 @@
         });
 
         const ctxDay3 = document.getElementById('day3Chart').getContext('2d');
-        new Chart(ctxDay3, {
+        const day3Chart = new Chart(ctxDay3, {
             type: 'doughnut',
             data: {
                 labels: ['交通', '明治神宮', ['原宿/表參道', '深度探索'], 'Shibuya Sky', '澀谷 & 晚餐'],
@@ -761,7 +833,7 @@
         });
 
         const ctxDay4 = document.getElementById('day4Chart').getContext('2d');
-        new Chart(ctxDay4, {
+        const day4Chart = new Chart(ctxDay4, {
             type: 'doughnut',
             data: {
                 labels: ['交通', '東京鐵塔', ['麻布十番 & 午餐'], '六本木 Hills', '聖誕點燈', '晚餐', '63 Angel 表演'],
@@ -774,7 +846,7 @@
         });
         
         const ctxDay5 = document.getElementById('day5Chart').getContext('2d');
-        new Chart(ctxDay5, {
+        const day5Chart = new Chart(ctxDay5, {
             type: 'doughnut',
             data: {
                 labels: ['Check-out & 交通', '築地 & 銀座', '前往機場', '機場緩衝'],
@@ -785,6 +857,70 @@
             },
             options: commonChartOptions
         });
+
+        // Store charts for responsive updates
+        const allCharts = [day1Chart, day2Chart, day3Chart, day4Chart, day5Chart];
+        chartMap = { day1: day1Chart, day2: day2Chart, day3: day3Chart, day4: day4Chart, day5: day5Chart };
+
+        // Update legend positions on resize to maintain good layout on mobile vs desktop
+        function updateLegendPositions() {
+            const pos = getLegendPosition();
+            allCharts.forEach(c => {
+                if (c && c.options && c.config) {
+                    c.options.plugins.legend.position = pos;
+                    c.options.plugins.legend.display = window.innerWidth > 640;
+                    c.update();
+                }
+            });
+            // Toggle or re-render HTML legends as needed
+            toggleAllHtmlLegends();
+        }
+
+        function renderHtmlLegend(chart, containerId) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            container.innerHTML = '';
+            const labels = chart.data.labels || [];
+            const dataset = (chart.data.datasets && chart.data.datasets[0]) || { backgroundColor: [] };
+            labels.forEach((lab, i) => {
+                const labelText = Array.isArray(lab) ? lab.join(' ') : lab;
+                const color = Array.isArray(dataset.backgroundColor) ? dataset.backgroundColor[i] : dataset.backgroundColor;
+                const item = document.createElement('div');
+                item.className = 'legend-item';
+                const box = document.createElement('span');
+                box.className = 'legend-box';
+                box.style.backgroundColor = color || '#ccc';
+                const labelSpan = document.createElement('span');
+                labelSpan.textContent = labelText;
+                item.appendChild(box);
+                item.appendChild(labelSpan);
+                container.appendChild(item);
+            });
+        }
+
+        function toggleAllHtmlLegends() {
+            const useHtmlLegend = window.innerWidth <= 640;
+            const areas = ['day1', 'day2', 'day3', 'day4', 'day5'];
+            areas.forEach(id => {
+                const chart = chartMap[id];
+                const legendContainer = document.getElementById(id + 'Legend');
+                if (!chart || !legendContainer) return;
+                if (useHtmlLegend) {
+                    renderHtmlLegend(chart, id + 'Legend');
+                } else {
+                    legendContainer.innerHTML = '';
+                }
+            });
+        }
+
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(updateLegendPositions, 120);
+        });
+
+        // call once on load in case initial layout needs bottom legend on mobile
+        updateLegendPositions();
 
     </script>
 </body>
